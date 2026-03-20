@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useSignIn, useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -55,9 +56,12 @@ export default function Hero() {
                 Waitlist Full
               </button>
             ) : (
-              <button className="px-8 py-4 bg-emerald-600 text-neutral-50 font-semibold rounded-md hover:bg-emerald-500 transition-colors">
+              <Link
+                href="/city"
+                className="px-8 py-4 bg-emerald-600 text-neutral-50 font-semibold rounded-md hover:bg-emerald-500 transition-colors inline-block text-center"
+              >
                 Enter the City
-              </button>
+              </Link>
             )
           ) : (
             <button
