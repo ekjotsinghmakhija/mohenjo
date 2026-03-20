@@ -7,8 +7,9 @@ import { api } from "../../../convex/_generated/api";
 import { useSyncUser } from "@/hooks/useSyncUser";
 
 export default function Hero() {
-  const { signIn } = useSignIn();
-  const { isSignedIn, isLoaded } = useUser();
+  // Destructure and rename isLoaded to avoid conflicts
+  const { isLoaded: isSignInLoaded, signIn } = useSignIn();
+  const { isLoaded: isUserLoaded, isSignedIn } = useUser();
 
   // Fetch live count from Convex. Default to 0 while loading.
   const founderCount = useQuery(api.users.getFounderCount) ?? 0;
@@ -17,7 +18,9 @@ export default function Hero() {
   const { syncError } = useSyncUser();
 
   const handleJoin = async () => {
-    if (!signIn) return;
+    // TypeScript now knows signIn is fully loaded and safe to use
+    if (!isSignInLoaded || !signIn) return;
+
     await signIn.authenticateWithRedirect({
       strategy: "oauth_github",
       redirectUrl: "/sso-callback",
@@ -42,7 +45,7 @@ export default function Hero() {
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          {!isLoaded ? (
+          {!isUserLoaded ? (
             <button disabled className="px-8 py-4 bg-neutral-800 text-neutral-500 font-semibold rounded-md">
               Initializing Protocol...
             </button>
@@ -59,9 +62,10 @@ export default function Hero() {
           ) : (
             <button
               onClick={handleJoin}
-              disabled={isFull}
+              // Disable button if city is full OR if Clerk hasn't loaded yet
+              disabled={isFull || !isSignInLoaded}
               className={`px-8 py-4 font-semibold rounded-md transition-colors ${
-                isFull
+                isFull || !isSignInLoaded
                   ? "bg-neutral-800 text-neutral-500 cursor-not-allowed"
                   : "bg-amber-500 text-neutral-950 hover:bg-amber-400"
               }`}
