@@ -16,10 +16,10 @@ export const storeUser = mutation({
 
     if (existingUser) return existingUser._id;
 
-    // The Hard Gatekeeper Logic
-    const userCount = (await ctx.db.query("users").collect()).length;
-    if (userCount >= 1000) {
-      throw new Error("Project Mohenjo has reached its initial 1,000 founder limit.");
+    // Hard Gatekeeper: 1,000 user limit
+    const users = await ctx.db.query("users").collect();
+    if (users.length >= 1000) {
+      throw new Error("Mohenjo has reached its 1,000 founder limit.");
     }
 
     return await ctx.db.insert("users", {
