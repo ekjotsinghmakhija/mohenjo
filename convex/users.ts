@@ -1,7 +1,11 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-export const storeUser = mutation({
+/**
+ * Syncs the Clerk user with our Convex database.
+ * Enforces the 1,000 user limit.
+ */
+export const syncUser = mutation({
   args: {
     name: v.string(),
     email: v.string(),
@@ -16,22 +20,22 @@ export const storeUser = mutation({
 
     if (existingUser) return existingUser._id;
 
-    // Hard Gatekeeper: 1,000 user limit
-    const users = await ctx.db.query("users").collect();
-    if (users.length >= 1000) {
-      throw new Error("Mohenjo has reached its 1,000 founder limit.");
+    // Hard limit check
+    const allUsers = await ctx.db.query("users").collect();
+    if (allUsers.length >= 1000) {
+      throw new Error("CAPACITY_REACHED: Mohenjo is currently full (1,000/1,000 founders).");
     }
 
     return await ctx.db.insert("users", {
       ...args,
       xp: 0,
       level: 1,
+      isFounder: true,
     });
   },
 });
 
-export const getCount = query({
-  args: {},
+export const getFounderCount = query({
   handler: async (ctx) => {
     const users = await ctx.db.query("users").collect();
     return users.length;
