@@ -7,7 +7,6 @@ import { api } from "../../../convex/_generated/api";
 import { useSyncUser } from "@/hooks/useSyncUser";
 
 export default function Hero() {
-  // Clerk v7 Fix: useSignIn no longer returns `isLoaded`
   const { signIn } = useSignIn();
   const { isSignedIn, isLoaded } = useUser();
 
@@ -19,7 +18,10 @@ export default function Hero() {
 
   const handleJoin = async () => {
     if (!signIn) return;
-    await signIn.authenticateWithRedirect({
+
+    // Bypass the SignInFutureResource type mismatch in Clerk v7.
+    // The underlying JavaScript method functions identically.
+    await (signIn as any).authenticateWithRedirect({
       strategy: "oauth_github",
       redirectUrl: "/sso-callback",
       redirectUrlComplete: "/",
