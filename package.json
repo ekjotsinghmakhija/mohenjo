@@ -1,35 +1,42 @@
 {
-  "name": "mohenjo",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "convex": "^1.34.0",
-    "next": "16.2.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.0",
-    "tailwindcss": "^4",
-    "typescript": "^5"
-  },
-  "ignoreScripts": [
-    "sharp",
-    "unrs-resolver"
-  ],
-  "trustedDependencies": [
-    "sharp",
-    "unrs-resolver"
-  ]
+    "name": "mohenjo",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start",
+        "lint": "eslint",
+        "test": "bun test",
+        "test:watch": "bun test --watch"
+    },
+    "dependencies": {
+        "convex": "^1.34.0",
+        "next": "16.2.0",
+        "react": "19.2.4",
+        "react-dom": "19.2.4"
+    },
+    "devDependencies": {
+        "@happy-dom/global-registrator": "^20.8.4",
+        "@tailwindcss/postcss": "^4",
+        "@testing-library/jest-dom": "^6.9.1",
+        "@testing-library/react": "^16.3.2",
+        "@types/bun": "^1.3.11",
+        "@types/node": "^20",
+        "@types/react": "^19",
+        "@types/react-dom": "^19",
+        "eslint": "^9",
+        "eslint-config-next": "16.2.0",
+        "happy-dom": "^20.8.4",
+        "tailwindcss": "^4",
+        "typescript": "^5"
+    },
+    "ignoreScripts": [
+        "sharp",
+        "unrs-resolver"
+    ],
+    "trustedDependencies": [
+        "sharp",
+        "unrs-resolver"
+    ]
 }
