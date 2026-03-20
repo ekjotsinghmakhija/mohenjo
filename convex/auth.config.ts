@@ -1,8 +1,8 @@
 export default {
   providers: [
     {
-      // This is the "Issuer" from your Clerk JWT Template
-      domain: "https://arriving-mastiff-71.clerk.accounts.dev",
+      // This refers to the variable you kept in the dashboard
+      domain: process.env.CLERK_JWT_ISSUER_DOMAIN,
       applicationID: "convex",
     },
   ],
