@@ -1,5 +1,6 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import ConvexClientProvider from "./ConvexClientProvider";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { dark } from "@clerk/themes";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
@@ -20,13 +21,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <html lang="en">
         <body className="bg-neutral-950 text-neutral-50 antialiased min-h-screen flex flex-col">
           <ConvexClientProvider>
-            {/* Add the Navbar here! */}
-            <Navbar />
-
-            {/* Make the main content fill the rest of the screen */}
-            <div className="flex-1 flex flex-col">
-              {children}
-            </div>
+            {/* Wrap the app in the Theme Engine */}
+            <ThemeProvider>
+              <Navbar />
+              <div className="flex-1 flex flex-col">
+                {children}
+              </div>
+            </ThemeProvider>
           </ConvexClientProvider>
         </body>
       </html>

@@ -32,7 +32,6 @@ describe("Users Backend", () => {
           name: `User ${i}`,
           email: `user${i}@test.com`,
           externalId: `ext_${i}`,
-          xp: 0,
           level: 1,
           isFounder: true,
         });
