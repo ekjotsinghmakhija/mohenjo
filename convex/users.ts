@@ -25,11 +25,10 @@ export const syncUser = mutation({
     externalId: v.string(),
     avatarUrl: v.optional(v.string()),
     faction: v.optional(
-      v.union(v.literal("vanguard"), v.literal("syndicate"), v.literal("celestial"))
+      v.union(v.literal("architect_empire"), v.literal("artisan_republic"), v.literal("void_syndicate"))
     ),
   },
   handler: async (ctx, args) => {
-    // 1. Check if user already exists
     const existingUser = await ctx.db
       .query("users")
       .withIndex("by_externalId", (q) => q.eq("externalId", args.externalId))
@@ -42,22 +41,52 @@ export const syncUser = mutation({
       return existingUser._id;
     }
 
-    // 2. Check the Gatekeeper (1,000 limit) for new users
-    // FIX: We query the DB directly here instead of calling the query function
     const allUsers = await ctx.db.query("users").collect();
-    const currentCount = allUsers.length;
-
-    if (currentCount >= 1000) {
+    if (allUsers.length >= 1000) {
       throw new Error("CAPACITY_REACHED: The Mohenjo Founder list is currently full.");
     }
 
-    // 3. Insert New Founder
+    // Insert New Founder with starting economy
     return await ctx.db.insert("users", {
       name: args.name,
       email: args.email,
       externalId: args.externalId,
       avatarUrl: args.avatarUrl,
       faction: args.faction,
+      resources: {
+        bronze: 100, // Starter funds
+        silver: 10,
+        gold: 0,
+        diamond: 0,
+      }
     });
   },
+});
+
+// The Economy Exchange Engine
+export const convertResource = mutation({
+  args: {
+    externalId: v.string(),
+    fromType: v.union(v.literal("bronze"), v.literal("silver"), v.literal("gold")),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_externalId", (q) => q.eq("externalId", args.externalId))
+      .unique();
+
+    if (!user || !user.resources) throw new Error("User or resources not found");
+
+    const r = user.resources;
+
+    if (args.fromType === "bronze" && r.bronze >= 10) {
+      await ctx.db.patch(user._id, { resources: { ...r, bronze: r.bronze - 10, silver: r.silver + 1 } });
+    } else if (args.fromType === "silver" && r.silver >= 10) {
+      await ctx.db.patch(user._id, { resources: { ...r, silver: r.silver - 10, gold: r.gold + 1 } });
+    } else if (args.fromType === "gold" && r.gold >= 10) {
+      await ctx.db.patch(user._id, { resources: { ...r, gold: r.gold - 10, diamond: r.diamond + 1 } });
+    } else {
+      throw new Error("Insufficient resources for conversion (Requires 10:1)");
+    }
+  }
 });

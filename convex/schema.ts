@@ -7,25 +7,50 @@ export default defineSchema({
     email: v.string(),
     externalId: v.string(),
     avatarUrl: v.optional(v.string()),
-    // Added these to match your production data and support the roadmap
+    faction: v.optional(
+      v.union(
+        v.literal("architect_empire"),
+        v.literal("artisan_republic"),
+        v.literal("void_syndicate")
+      )
+    ),
+    resources: v.optional(
+      v.object({
+        bronze: v.number(),
+        silver: v.number(),
+        gold: v.number(),
+        diamond: v.number(),
+      })
+    ),
+    lastGithubSync: v.optional(v.number()),
+
+    // Legacy fields kept optional so existing DB records don't fail validation
     xp: v.optional(v.number()),
     level: v.optional(v.number()),
     isFounder: v.optional(v.boolean()),
-    // Faction for Multiverse Grid
-    faction: v.optional(
-      v.union(v.literal("vanguard"), v.literal("syndicate"), v.literal("celestial"))
-    ),
   }).index("by_externalId", ["externalId"]),
 
   buildings: defineTable({
     userId: v.id("users"),
     type: v.string(),
-    x: v.number(),
-    y: v.number(),
     level: v.number(),
+
+    // NEW Hex Coordinates (Optional to let old DB records pass)
+    q: v.optional(v.number()),
+    r: v.optional(v.number()),
+
+    // OLD Square Coordinates (Kept so old DB records pass)
+    x: v.optional(v.number()),
+    y: v.optional(v.number()),
   })
   .index("by_user", ["userId"])
-  .index("by_position", ["x", "y"]),
+  .index("by_position", ["q", "r"]),
+
+  territory: defineTable({
+    faction: v.string(),
+    q: v.number(),
+    r: v.number(),
+  }).index("by_position", ["q", "r"]),
 
   activity: defineTable({
     userId: v.id("users"),

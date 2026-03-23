@@ -1,28 +1,14 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { useUser } from "@clerk/nextjs";
 import FactionPicker from "./FactionPicker";
+import DefectModal from "./DefectModal";
 
-const GRID_SIZE = 30; // Massive 30x30 shared map
-
-// Helper to determine which territory a tile belongs to
-const getSector = (x: number, y: number) => {
-  if (x < 15 && y < 15) return "vanguard";
-  if (x >= 15 && y < 15) return "syndicate";
-  return "celestial";
-};
-
-// Helper for Faction-specific building styling
-const getBuildingStyle = (bFaction: string) => {
-  if (bFaction === "vanguard") return { color: "6, 182, 212", glow: true, shadow: "rgb(6, 182, 212)", dark: false };
-  if (bFaction === "syndicate") return { color: "220, 38, 38", glow: false, shadow: "rgba(0,0,0,0.8)", dark: true };
-  if (bFaction === "celestial") return { color: "255, 255, 255", glow: false, shadow: "rgba(255,255,255,0.2)", dark: false };
-  return { color: "115, 115, 115", glow: false, shadow: "transparent", dark: true };
-};
+const GRID_SIZE = 30;
 
 export default function CityGrid() {
   const { user } = useUser();
@@ -30,208 +16,232 @@ export default function CityGrid() {
   const placeBuilding = useMutation(api.buildings.placeBuilding);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { faction } = useTheme();
+  const { faction, theme } = useTheme();
 
-  // Interactive Camera State
+  const [showDefectModal, setShowDefectModal] = useState(false);
+
+  // Camera & Interaction State
   const camera = useRef({ x: 0, y: 0 });
   const isDragging = useRef(false);
-  const hasDragged = useRef(false); // Prevents clicking when panning
+  const hasDragged = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
+
+  // Lightweight "Block Characters" State
+  const agents = useRef<Array<{x: number, y: number, tx: number, ty: number, progress: number}>>([]);
 
   useEffect(() => {
     if (faction === "unassigned") return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    let animationFrameId: number;
+
+    // Generate random agents based on building count
+    if (agents.current.length === 0 && buildings.length > 0) {
+      for(let i=0; i < Math.min(buildings.length * 2, 50); i++) {
+        const start = buildings[Math.floor(Math.random() * buildings.length)];
+        const end = buildings[Math.floor(Math.random() * buildings.length)];
+        agents.current.push({ x: start.q, y: start.r, tx: end.q, ty: end.r, progress: Math.random() });
+      }
+    }
+
     const render = () => {
+      // 1. Fullscreen Canvas Setup
       const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
+      const width = window.innerWidth;
+      const height = window.innerHeight;
 
-      // Prevent constant resizing in loop, only set once per render phase
-      if (canvas.width !== rect.width * dpr) canvas.width = rect.width * dpr;
-      if (canvas.height !== rect.height * dpr) canvas.height = rect.height * dpr;
+      if (canvas.width !== width * dpr) canvas.width = width * dpr;
+      if (canvas.height !== height * dpr) canvas.height = height * dpr;
 
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // Reset scale
-      const width = rect.width;
-      const height = rect.height;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // 1. Clear & Deep Void Background
+      // Clear Void
       ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = "#050505";
+      ctx.fillStyle = "#020202";
       ctx.fillRect(0, 0, width, height);
 
-      const TILE_W = 60;
-      const TILE_H = 30;
+      const TILE_W = 80;
+      const TILE_H = 40;
       const offsetX = width / 2;
       const offsetY = height / 4;
 
-      const toIso = (x: number, y: number, z: number = 0) => ({
-        px: (x - y) * (TILE_W / 2) + offsetX + camera.current.x,
-        py: (x + y) * (TILE_H / 2) + offsetY + camera.current.y - z
+      const toIso = (q: number, r: number, z: number = 0) => ({
+        px: (q - r) * (TILE_W / 2) + offsetX + camera.current.x,
+        py: (q + r) * (TILE_H / 2) + offsetY + camera.current.y - z
       });
 
-      // 2. Draw Territory Zoning (The Ground)
-      ctx.globalCompositeOperation = "source-over";
-      for (let x = 0; x < GRID_SIZE; x++) {
-        for (let y = 0; y < GRID_SIZE; y++) {
-          const sector = getSector(x, y);
-          const p1 = toIso(x, y);
-          const p2 = toIso(x + 1, y);
-          const p3 = toIso(x + 1, y + 1);
-          const p4 = toIso(x, y + 1);
-
-          if (sector === "vanguard") { ctx.fillStyle = "rgba(6, 182, 212, 0.05)"; ctx.strokeStyle = "rgba(6, 182, 212, 0.15)"; }
-          else if (sector === "syndicate") { ctx.fillStyle = "rgba(220, 38, 38, 0.05)"; ctx.strokeStyle = "rgba(220, 38, 38, 0.15)"; }
-          else { ctx.fillStyle = "rgba(255, 255, 255, 0.02)"; ctx.strokeStyle = "rgba(255, 255, 255, 0.1)"; }
-
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(p1.px, p1.py); ctx.lineTo(p2.px, p2.py); ctx.lineTo(p3.px, p3.py); ctx.lineTo(p4.px, p4.py);
-          ctx.closePath();
-          ctx.fill(); ctx.stroke();
+      // 2. Draw Floor Grid
+      ctx.strokeStyle = "rgba(255,255,255,0.03)";
+      ctx.lineWidth = 1;
+      for (let q = 0; q < GRID_SIZE; q++) {
+        for (let r = 0; r < GRID_SIZE; r++) {
+          const p1 = toIso(q, r); const p2 = toIso(q + 1, r);
+          const p3 = toIso(q + 1, r + 1); const p4 = toIso(q, r + 1);
+          ctx.beginPath(); ctx.moveTo(p1.px, p1.py); ctx.lineTo(p2.px, p2.py);
+          ctx.lineTo(p3.px, p3.py); ctx.lineTo(p4.px, p4.py); ctx.closePath(); ctx.stroke();
         }
       }
 
-      // 3. Draw Buildings (Painter's Algorithm)
-      const sortedBuildings = [...buildings].sort((a, b) => (a.x + a.y) - (b.x + b.y));
-
+      // 3. Draw Buildings
+      const sortedBuildings = [...buildings].sort((a, b) => (a.q + a.r) - (b.q + b.r));
       sortedBuildings.forEach((b: any) => {
-        const h = b.level * 20;
-        const c = toIso(b.x, b.y, 0);
+        const h = b.level * 25;
+        const c = toIso(b.q, b.r, 0);
 
-        const left = { px: c.px - TILE_W / 2, py: c.py };
-        const right = { px: c.px + TILE_W / 2, py: c.py };
-        const top = { px: c.px, py: c.py - TILE_H / 2 };
-        const bottom = { px: c.px, py: c.py + TILE_H / 2 };
+        // Faction Colors
+        const color = b.faction === "architect_empire" ? "245, 158, 11" :
+                      b.faction === "void_syndicate" ? "16, 185, 129" : "6, 182, 212";
 
-        const style = getBuildingStyle(b.faction);
-
-        if (style.glow) {
-          ctx.shadowBlur = 15; ctx.shadowColor = style.shadow; ctx.globalCompositeOperation = "screen";
-        } else {
-          ctx.shadowBlur = style.dark ? 10 : 0; ctx.shadowOffsetY = style.dark ? 10 : 0;
-          ctx.shadowColor = style.shadow; ctx.globalCompositeOperation = "source-over";
-        }
-
-        ctx.strokeStyle = style.dark ? "#333" : `rgb(${style.color})`;
+        ctx.fillStyle = `rgba(${color}, 0.15)`;
+        ctx.strokeStyle = `rgba(${color}, 0.8)`;
         ctx.lineWidth = 1.5;
 
-        const drawFace = (path: any[], fillStyle: string) => {
-          ctx.fillStyle = fillStyle;
-          ctx.beginPath(); ctx.moveTo(path[0].px, path[0].py);
-          for(let i=1; i<path.length; i++) ctx.lineTo(path[i].px, path[i].py);
-          ctx.closePath(); ctx.fill(); ctx.stroke();
-        };
+        // Draw simple 3D Block
+        ctx.beginPath();
+        ctx.moveTo(c.px, c.py);
+        ctx.lineTo(c.px - TILE_W/2, c.py - TILE_H/2);
+        ctx.lineTo(c.px - TILE_W/2, c.py - TILE_H/2 - h);
+        ctx.lineTo(c.px, c.py - h);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
 
-        // Draw Left, Right, Top Prisms
-        drawFace([bottom, left, {px: left.px, py: left.py-h}, {px: bottom.px, py: bottom.py-h}], style.dark ? `rgb(${style.color})` : `rgba(${style.color}, 0.1)`);
-        drawFace([bottom, right, {px: right.px, py: right.py-h}, {px: bottom.px, py: bottom.py-h}], style.dark ? `rgba(0,0,0,0.5)` : `rgba(${style.color}, 0.15)`);
-        drawFace([left, top, right, bottom].map(p => ({px: p.px, py: p.py-h})), style.dark ? `#222` : `rgba(${style.color}, 0.3)`);
+        ctx.beginPath();
+        ctx.moveTo(c.px, c.py);
+        ctx.lineTo(c.px + TILE_W/2, c.py - TILE_H/2);
+        ctx.lineTo(c.px + TILE_W/2, c.py - TILE_H/2 - h);
+        ctx.lineTo(c.px, c.py - h);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
 
-        ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; // Reset
+        // Roof
+        ctx.fillStyle = `rgba(${color}, 0.3)`;
+        ctx.beginPath();
+        ctx.moveTo(c.px, c.py - h);
+        ctx.lineTo(c.px - TILE_W/2, c.py - TILE_H/2 - h);
+        ctx.lineTo(c.px, c.py - TILE_H - h);
+        ctx.lineTo(c.px + TILE_W/2, c.py - TILE_H/2 - h);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
       });
+
+      // 4. Draw Block Characters (Agents)
+      ctx.globalCompositeOperation = "screen";
+      agents.current.forEach(a => {
+        a.progress += 0.01; // Movement speed
+        if (a.progress >= 1) {
+           a.progress = 0;
+           a.x = a.tx; a.y = a.ty;
+           const next = buildings[Math.floor(Math.random() * buildings.length)];
+           if(next) { a.tx = next.q; a.ty = next.r; }
+        }
+
+        // Interpolate position
+        const currentQ = a.x + (a.tx - a.x) * a.progress;
+        const currentR = a.y + (a.ty - a.y) * a.progress;
+        const pos = toIso(currentQ, currentR, 5); // Float slightly above ground
+
+        // Draw a glowing data block
+        ctx.shadowBlur = 10; ctx.shadowColor = theme.primary;
+        ctx.fillStyle = `rgb(${theme.primary})`;
+        ctx.fillRect(pos.px - 3, pos.py - 3, 6, 6);
+        ctx.shadowBlur = 0;
+      });
+      ctx.globalCompositeOperation = "source-over";
+
+      animationFrameId = requestAnimationFrame(render);
     };
 
-    render(); // Initial draw
+    render();
 
-    // --- INTERACTIVE EVENT LISTENERS ---
-    const handleMouseDown = (e: MouseEvent) => {
-      isDragging.current = true;
-      hasDragged.current = false;
-      lastMouse.current = { x: e.clientX, y: e.clientY };
-    };
-
+    // Camera Drag Handlers
+    const handleMouseDown = (e: MouseEvent) => { isDragging.current = true; hasDragged.current = false; lastMouse.current = { x: e.clientX, y: e.clientY }; };
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current) return;
-      hasDragged.current = true; // Mark as a drag so we don't accidentally build
-      camera.current.x += e.clientX - lastMouse.current.x;
-      camera.current.y += e.clientY - lastMouse.current.y;
+      hasDragged.current = true;
+      camera.current.x += e.clientX - lastMouse.current.x; camera.current.y += e.clientY - lastMouse.current.y;
       lastMouse.current = { x: e.clientX, y: e.clientY };
-      render(); // Only re-render when moving!
     };
-
     const handleMouseUp = () => { isDragging.current = false; };
 
     canvas.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("resize", render); // Handle window resize
 
     return () => {
+      cancelAnimationFrame(animationFrameId);
       canvas.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("resize", render);
     };
-  }, [buildings, faction]); // Re-render when DB updates
-
-  // --- CLICK TO BUILD LOGIC ---
-  const handleCanvasClick = async (e: React.MouseEvent) => {
-    if (hasDragged.current || !user) return; // Don't build if we were just panning the map!
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    const TILE_W = 60; const TILE_H = 30;
-    const offsetX = rect.width / 2; const offsetY = rect.height / 4;
-
-    // Reverse Isometric Math to find which Grid (X, Y) was clicked
-    const adjX = clickX - offsetX - camera.current.x;
-    const adjY = clickY - offsetY - camera.current.y;
-
-    const gridY = (adjY / (TILE_H / 2) - adjX / (TILE_W / 2)) / 2;
-    const gridX = (adjY / (TILE_H / 2) + adjX / (TILE_W / 2)) / 2;
-
-    const gx = Math.floor(gridX);
-    const gy = Math.floor(gridY);
-
-    if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) {
-      const tileSector = getSector(gx, gy);
-
-      // GAME MECHANIC: Territory Enforcement
-      if (tileSector !== faction) {
-        alert(`ACCESS DENIED: You belong to the ${faction?.toUpperCase()} faction. You can only build in your territory!`);
-        return;
-      }
-
-      try {
-        await placeBuilding({ externalId: user.id, x: gx, y: gy });
-      } catch (error: any) {
-        alert(error.message);
-      }
-    }
-  };
+  }, [buildings, faction, theme]);
 
   if (faction === "unassigned") return <FactionPicker />;
 
   return (
-    <div className="w-full relative rounded-xl overflow-hidden border border-white/5 shadow-2xl">
-      <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:100%_4px] z-10" />
-      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_40%,rgba(0,0,0,0.8)_100%)] z-20" />
+    <div className="w-full h-full relative">
+      <canvas ref={canvasRef} className="w-full h-full cursor-crosshair block bg-black" />
 
-      {/* The Map Canvas is now Clickable! */}
-      <canvas
-        ref={canvasRef}
-        onClick={handleCanvasClick}
-        className="w-full h-[700px] cursor-crosshair block active:cursor-grabbing"
-      />
+      {/* --- HUD OVERLAYS --- */}
 
-      <div className="absolute bottom-6 left-6 z-30 flex flex-col gap-1 pointer-events-none">
-        <div className={`text-[10px] font-mono tracking-widest uppercase mb-1 ${faction === 'vanguard' ? 'text-cyan-400' : faction === 'syndicate' ? 'text-red-500' : 'text-white'}`}>
-          FACTION: {faction}
+      {/* Top Right: Economy / Resources */}
+      <div className="absolute top-6 right-6 flex gap-3 pointer-events-auto z-40">
+        <div className="bg-black/80 backdrop-blur-md border border-amber-900/50 px-4 py-2 rounded-lg flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-amber-600 shadow-[0_0_10px_#d97706]" />
+          <span className="font-mono text-amber-500 font-bold tracking-widest">1,200 BRONZE</span>
         </div>
-        <div className="px-3 py-1.5 bg-black/60 border border-white/10 rounded text-xs text-white/70 font-mono backdrop-blur-md">
-          GLOBAL_NODES: {buildings.length}
-        </div>
-        <div className="text-[10px] text-neutral-500 font-mono mt-1">
-          Click and drag to pan the map. Click your sector to build.
+        <div className="bg-black/80 backdrop-blur-md border border-neutral-700 px-4 py-2 rounded-lg flex items-center gap-2">
+          <div className="w-3 h-3 rounded-full bg-neutral-400 shadow-[0_0_10px_#9ca3af]" />
+          <span className="font-mono text-neutral-300 font-bold tracking-widest">45 SILVER</span>
         </div>
       </div>
+
+      {/* Top Left: Profile & Defection */}
+      <div className="absolute top-6 left-6 z-40 pointer-events-auto">
+        <div className="bg-black/80 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-2xl">
+          <div className="flex items-center gap-4 mb-4">
+             <div className="w-12 h-12 rounded-full bg-neutral-800 overflow-hidden border-2 border-cyan-500">
+                <img src={user?.imageUrl} alt="Avatar" className="w-full h-full object-cover"/>
+             </div>
+             <div>
+                <div className="text-white font-bold text-lg leading-tight">{user?.username || "Commander"}</div>
+                <div className="text-cyan-400 text-xs font-mono tracking-widest uppercase">{faction?.replace("_", " ")}</div>
+             </div>
+          </div>
+
+          <button
+            onClick={() => setShowDefectModal(true)}
+            className="w-full py-2 bg-red-950/30 hover:bg-red-900/50 border border-red-900/50 rounded text-red-500 text-xs font-mono transition-colors"
+          >
+            INITIATE DEFECTION
+          </button>
+        </div>
+      </div>
+
+      {/* Bottom Center: Build Action Bar (Clash of Clans style) */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 pointer-events-auto flex gap-4">
+        <button className="flex flex-col items-center bg-black/90 border border-amber-500/50 hover:border-amber-500 rounded-xl p-4 transition-all hover:-translate-y-2">
+           <div className="w-12 h-12 bg-amber-900/30 rounded mb-2 border border-amber-500/30 flex items-center justify-center">🏛️</div>
+           <span className="text-white font-bold text-sm">Construct</span>
+           <span className="text-amber-500 text-xs font-mono mt-1">-10 Bronze</span>
+        </button>
+
+        <button className="flex flex-col items-center bg-black/90 border border-cyan-500/50 hover:border-cyan-500 rounded-xl p-4 transition-all hover:-translate-y-2 opacity-50 cursor-not-allowed">
+           <div className="w-12 h-12 bg-cyan-900/30 rounded mb-2 border border-cyan-500/30 flex items-center justify-center">⬆️</div>
+           <span className="text-white font-bold text-sm">Upgrade</span>
+           <span className="text-cyan-500 text-xs font-mono mt-1">Select Node</span>
+        </button>
+
+        <button className="flex flex-col items-center bg-black/90 border border-red-500/50 hover:border-red-500 rounded-xl p-4 transition-all hover:-translate-y-2 opacity-50 cursor-not-allowed">
+           <div className="w-12 h-12 bg-red-900/30 rounded mb-2 border border-red-500/30 flex items-center justify-center">⚔️</div>
+           <span className="text-white font-bold text-sm">Attack</span>
+           <span className="text-red-500 text-xs font-mono mt-1">Requires Clan</span>
+        </button>
+      </div>
+
+      {/* Modals */}
+      {showDefectModal && <DefectModal onClose={() => setShowDefectModal(false)} />}
     </div>
   );
 }
