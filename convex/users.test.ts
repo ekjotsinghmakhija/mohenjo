@@ -26,26 +26,25 @@ describe("Users Backend", () => {
     const t = convexTest(schema);
 
     // 1. Manually 'seed' 1000 users into the mock database
+    // Fixed: Removed 'isFounder' and 'level' which are not in the schema
     await t.run(async (ctx) => {
       for (let i = 0; i < 1000; i++) {
         await ctx.db.insert("users", {
           name: `User ${i}`,
           email: `user${i}@test.com`,
           externalId: `ext_${i}`,
-          level: 1,
-          isFounder: true,
         });
       }
     });
 
     // 2. Attempt to sync the 1,001st user via the mutation
-    // We expect this to throw the Error we defined in users.ts
     const trySync = () => t.mutation(api.users.syncUser, {
       name: "The 1001st Developer",
       email: "failed@mohenjo.com",
       externalId: "user_1001",
     });
 
-    expect(trySync()).rejects.toThrow(/1,000 founder limit/);
+    // We expect this to throw the Error defined in users.ts
+    expect(trySync()).rejects.toThrow(/CAPACITY_REACHED/);
   });
 });
