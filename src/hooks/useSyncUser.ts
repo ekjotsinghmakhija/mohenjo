@@ -3,6 +3,15 @@ import { useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 
+// Create a type that accepts both the new and legacy factions so TypeScript is happy
+type FactionType =
+  | "architect_empire"
+  | "artisan_republic"
+  | "void_syndicate"
+  | "vanguard"
+  | "syndicate"
+  | "celestial";
+
 export function useSyncUser() {
   const { user, isLoaded, isSignedIn } = useUser();
   const syncUserMutation = useMutation(api.users.syncUser);
@@ -46,7 +55,7 @@ export function useSyncUser() {
   }, [user, isLoaded, isSignedIn, syncUserMutation]);
 
   // Expose a method to let the user pick their faction later
-  const setFaction = async (faction: "vanguard" | "syndicate" | "celestial") => {
+  const setFaction = async (faction: FactionType) => {
     if (!user) return;
     await syncUserMutation({
       name: user.fullName || user.username || "Anonymous Founder",

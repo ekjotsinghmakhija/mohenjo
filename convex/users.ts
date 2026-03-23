@@ -25,7 +25,7 @@ export const syncUser = mutation({
     externalId: v.string(),
     avatarUrl: v.optional(v.string()),
     faction: v.optional(
-      v.union(v.literal("architect_empire"), v.literal("artisan_republic"), v.literal("void_syndicate"))
+      v.union(v.literal("architect_empire"), v.literal("artisan_republic"), v.literal("void_syndicate"), v.literal("vanguard"), v.literal("syndicate"), v.literal("celestial"))
     ),
   },
   handler: async (ctx, args) => {
@@ -35,6 +35,13 @@ export const syncUser = mutation({
       .unique();
 
     if (existingUser) {
+      // FIX: If this is an old account that doesn't have an economy yet, give them the starter funds!
+      if (!existingUser.resources) {
+        await ctx.db.patch(existingUser._id, {
+          resources: { bronze: 100, silver: 10, gold: 0, diamond: 0 }
+        });
+      }
+
       if (args.faction && !existingUser.faction) {
         await ctx.db.patch(existingUser._id, { faction: args.faction });
       }
@@ -46,7 +53,6 @@ export const syncUser = mutation({
       throw new Error("CAPACITY_REACHED: The Mohenjo Founder list is currently full.");
     }
 
-    // Insert New Founder with starting economy
     return await ctx.db.insert("users", {
       name: args.name,
       email: args.email,
@@ -54,7 +60,7 @@ export const syncUser = mutation({
       avatarUrl: args.avatarUrl,
       faction: args.faction,
       resources: {
-        bronze: 100, // Starter funds
+        bronze: 100,
         silver: 10,
         gold: 0,
         diamond: 0,
@@ -63,7 +69,6 @@ export const syncUser = mutation({
   },
 });
 
-// The Economy Exchange Engine
 export const convertResource = mutation({
   args: {
     externalId: v.string(),
