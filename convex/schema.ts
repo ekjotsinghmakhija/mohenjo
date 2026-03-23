@@ -7,13 +7,23 @@ export default defineSchema({
     email: v.string(),
     externalId: v.string(),
     avatarUrl: v.optional(v.string()),
+
+    // The Faction/Civilization
     faction: v.optional(
       v.union(
+        // V2 Civilizations
         v.literal("architect_empire"),
         v.literal("artisan_republic"),
-        v.literal("void_syndicate")
+        v.literal("void_syndicate"),
+
+        // V1 Legacy Factions (Kept so existing DB records pass validation)
+        v.literal("vanguard"),
+        v.literal("syndicate"),
+        v.literal("celestial")
       )
     ),
+
+    // The 4-Tier Economy System
     resources: v.optional(
       v.object({
         bronze: v.number(),
@@ -22,9 +32,10 @@ export default defineSchema({
         diamond: v.number(),
       })
     ),
+
     lastGithubSync: v.optional(v.number()),
 
-    // Legacy fields kept optional so existing DB records don't fail validation
+    // Legacy fields
     xp: v.optional(v.number()),
     level: v.optional(v.number()),
     isFounder: v.optional(v.boolean()),
@@ -35,11 +46,8 @@ export default defineSchema({
     type: v.string(),
     level: v.number(),
 
-    // NEW Hex Coordinates (Optional to let old DB records pass)
     q: v.optional(v.number()),
     r: v.optional(v.number()),
-
-    // OLD Square Coordinates (Kept so old DB records pass)
     x: v.optional(v.number()),
     y: v.optional(v.number()),
   })
