@@ -7,7 +7,11 @@ export default defineSchema({
     email: v.string(),
     externalId: v.string(),
     avatarUrl: v.optional(v.string()),
-    // Add the Faction Union Type
+    // Added these to match your production data and support the roadmap
+    xp: v.optional(v.number()),
+    level: v.optional(v.number()),
+    isFounder: v.optional(v.boolean()),
+    // Faction for Multiverse Grid
     faction: v.optional(
       v.union(v.literal("vanguard"), v.literal("syndicate"), v.literal("celestial"))
     ),
